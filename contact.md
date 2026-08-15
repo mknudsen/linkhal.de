@@ -5,7 +5,6 @@ date: 2007-06-27 10:28:59.000000000 +02:00
 type: page
 parent_id: '279'
 published: true
-password: ''
 status: publish
 categories: []
 tags: []
