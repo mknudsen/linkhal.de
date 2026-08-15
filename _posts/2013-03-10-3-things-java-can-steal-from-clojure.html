@@ -1,0 +1,108 @@
+---
+layout: post
+title: 3-things-java-can-steal-from-clojure
+date: 2013-03-10 18:43:40.000000000 +01:00
+type: post
+parent_id: '0'
+published: true
+status: publish
+categories: []
+tags: []
+meta:
+  ilap_hash: d30888ac59cba7e7783799139d8f104f
+  _oembed_40e13898c60de61f7d30bce3d025c84a: "{{unknown}}"
+  _oembed_c71e61091f68d8f32c277fbd4192e103: "{{unknown}}"
+  _oembed_e6334c90b91fd593eaac3872f133b6a1: "{{unknown}}"
+  _oembed_ddcbdb179be517077a79ba43fa804a7f: "{{unknown}}"
+  _oembed_3751100a0c487dc9446eaf512daeeb67: "{{unknown}}"
+  _oembed_a1daa877d628506ae99f654e87273d79: "{{unknown}}"
+author: martin
+---
+<p><a href="https://ericnormand.me/3-things-java-can-steal-from-clojure">3-things-java-can-steal-from-clojure</a></p>
+<p>3 Things Java Programmers Can Steal from Clojure</p>
+<p>https://www.lispcast.com/3-things-java-can-steal-from-clojure</p>
+<p>The other day I wrote about some principles that programming in Clojure makes very clear. Those principle could be applied just as well in Java, and often are. However, there are some things that make Clojure distinct.<br />
+Three of those distinctions are the way it deals with state change (using an STM), the Persistent Data Structures, and the literal syntax for data with a reader (now called edn). Diving into the source code for Clojure, I realized that these three bits were written in Java. And that means that they can be used from Java. It is certainly not as easy as using them in Clojure, but they are all three powerful enough to warrant using them if you are using Java. You simply need to add one more JAR to your project (or add a maven dependency). I have constructed a few minimal examples of their use.<br />
+1. Persistent Data Structures<br />
+Clojure comes with several powerful and fast collection classes. The interesting thing about them is that they are immutable. If you want to add an object to a list, you actually create a new list containing the old elements and the new element. Instead of using copy-on-write, it reuses most of the internal structure of the original list, so only a small number of objects need to be allocated. It turns out that this can be done very quickly, comparable to using an ArrayList.<br />
+The following example illustrates three of the more useful data structures: Vector, HashMap, and HashSet.<br />
+package persistent;</p>
+<p>import clojure.lang.IPersistentMap;<br />
+import clojure.lang.IPersistentSet;<br />
+import clojure.lang.IPersistentVector;<br />
+import clojure.lang.PersistentHashMap;<br />
+import clojure.lang.PersistentHashSet;<br />
+import clojure.lang.PersistentVector;</p>
+<p>public class PersistentTest {<br />
+  public static void main(String[] args) {<br />
+    IPersistentMap m = PersistentHashMap.create("abc", "xyz");<br />
+    m = m.assoc(1, 4); // add a new key/value pair<br />
+    m = m.assoc("key", "value");<br />
+    m = m.without("abc"); // remove key "abc"<br />
+    System.out.println(m);</p>
+<p>    IPersistentVector v = PersistentVector.create(1, 2, 3);<br />
+    v = v.assocN(0, "a string"); // change index 0<br />
+    v = v.cons("should be last"); // add a string at the end<br />
+    System.out.println(v);</p>
+<p>    IPersistentSet s = PersistentHashSet.create("a", "b", "c");<br />
+    s = (IPersistentSet) s.cons("d"); // add d to the set<br />
+    s = (IPersistentSet) ((IPersistentMap) s).without("a"); // remove an element<br />
+    s.contains("g"); // should return false<br />
+    System.out.println(s);<br />
+  }<br />
+}</p>
+<p>Now, it ain't pretty. But it's actually no worse than quite a few native Java libraries I've seen. There may be a better way to do this, but this one works.<br />
+2. Software Transactional Memory<br />
+Clojure uses Multiversion concurrency control to provide a safe way to manage concurrent access to state shared between threads. In Clojure, they are called refs. I won't go very deep into how it works. Suffice it to say that Clojure refs gives you non-blocking reads and transactional updates without having to do locking yourself. There are two caveats: 1 is that the value you give to the ref has to be immutable. 2 is that you should not perform IO (or perform any mutation) inside of the transaction.<br />
+package stm;</p>
+<p>import java.util.concurrent.Callable;</p>
+<p>import clojure.lang.LockingTransaction;<br />
+import clojure.lang.Ref;</p>
+<p>public class STMTest {<br />
+  public static void main(String[] args) {<br />
+    // final needed to be used in anonymous class<br />
+    final Ref r = new Ref(1);<br />
+    final Ref s = new Ref(5);</p>
+<p>    try {<br />
+      // run this in a transaction<br />
+      // don't do IO inside<br />
+      LockingTransaction.runInTransaction(<br />
+        new Callable&lt;Object&gt;() {<br />
+          public Object call(){<br />
+            s.set((Integer)r.deref() + 10);<br />
+            r.set(2);<br />
+            return null;<br />
+          }<br />
+        }<br />
+      );<br />
+    } catch (Exception e) {<br />
+      e.printStackTrace();<br />
+    }</p>
+<p>    System.out.println(r.deref());<br />
+    System.out.println(s.deref());<br />
+  }<br />
+}</p>
+<p>3. Extensible Data Notation<br />
+With Clojure 1.5, edn has become a standard part of the language. Edn is like an extensible JSON where the keys of objects can be any value (not just strings). It is based on the Clojure literal syntax, much in the same way that JSON is based on Javascript literal syntax. It is a nice way to serialize data. And since you already have the JAR in your project, it's a no brainer to use it.<br />
+package edn;</p>
+<p>import java.io.PushbackReader;<br />
+import java.io.StringReader;</p>
+<p>import clojure.lang.EdnReader;<br />
+import clojure.lang.PersistentHashMap;</p>
+<p>public class EDNTest {<br />
+  public static void main(String[] args) {<br />
+    // reading from a string<br />
+    System.out.println(<br />
+      EdnReader.readString("{"x" 1 "y" 2}", PersistentHashMap.EMPTY));</p>
+<p>    // reading from a Reader<br />
+    // really, you can use any Reader wrapped in a PushbackReader<br />
+    System.out.println(<br />
+      EdnReader.read(new PushbackReader(new StringReader("#{10 2 3}")),<br />
+                     PersistentHashMap.EMPTY));<br />
+  }<br />
+}</p>
+<p>                    &lt;λ&gt;</p>
+<p>                      You may also be interested in my<br />
+                      Introduction<br />
+                      to Clojure Videos.</p>
+<p>Gesendet von gReader Pro</p>
