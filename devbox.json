@@ -33,6 +33,12 @@
       "finanztip": [
         "bundle exec ruby _scripts/finanztip.rb"
       ],
+      "update-finance-links": [
+        "devbox run finanztip",
+        "devbox run kommerblog",
+        "devbox run kommeryoutube",
+        "devbox run benfelixyoutube"
+      ],
       "uncomitted": [
         "git status -s|grep \"??\"|cut -d \" \" -f 2|grep ^_posts"
       ],

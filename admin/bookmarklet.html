@@ -1,0 +1,142 @@
+---
+layout: page
+title: "Bookmarklet: Save Selection as Markdown Post"
+description: "A bookmarklet that converts a highlighted page selection into Markdown and opens a prefilled GitHub form to publish it as a Jekyll blog post."
+---
+
+<p>Drag this to your bookmarks bar, then on any page select some content and click it. It opens a prefilled GitHub "new file" form for a Markdown post on this blog.</p>
+
+<p><a id="bookmarklet" href="#">post this</a></p>
+
+<script src="https://cdn.jsdelivr.net/npm/source-map@0.7.3/dist/source-map.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/terser/dist/bundle.min.js"></script>
+<script>
+    function bookmarkletSource() {
+        let today = new Date().toISOString().split('T')[0];
+        let title = document.title.trim();
+        let slug = title.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
+        let filename = `${today}-${slug}.md`;
+
+        let selection = window.getSelection();
+        if (selection.rangeCount === 0) {
+            alert('Please select some content first.');
+            return;
+        }
+
+        let fragment = selection.getRangeAt(0).cloneContents();
+        let container = document.createElement('div');
+        container.appendChild(fragment);
+
+        function escapeMarkdown(text) {
+            return text.replace(/([\\`*_\[\]])/g, '\\$1');
+        }
+
+        function nodeToMarkdown(node) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return escapeMarkdown(node.textContent);
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+
+            let tag = node.tagName.toLowerCase();
+            if (tag === 'script' || tag === 'style') {
+                return '';
+            }
+
+            function children() {
+                return Array.from(node.childNodes).map(nodeToMarkdown).join('');
+            }
+
+            switch (tag) {
+                case 'br':
+                    return '  \n';
+                case 'p':
+                case 'div':
+                    return children().trim() + '\n\n';
+                case 'strong':
+                case 'b':
+                    return `**${children().trim()}**`;
+                case 'em':
+                case 'i':
+                    return `_${children().trim()}_`;
+                case 'a': {
+                    let href = node.getAttribute('href') || '';
+                    let text = children().trim() || href;
+                    return `[${text}](${href})`;
+                }
+                case 'img': {
+                    let src = node.getAttribute('src') || '';
+                    let alt = node.getAttribute('alt') || '';
+                    return `![${alt}](${src})`;
+                }
+                case 'code':
+                    return `\`${node.textContent}\``;
+                case 'pre':
+                    return `\n\`\`\`\n${node.textContent.trim()}\n\`\`\`\n\n`;
+                case 'blockquote': {
+                    let inner = children().trim();
+                    return inner.split('\n').map(line => `> ${line}`).join('\n') + '\n\n';
+                }
+                case 'ul':
+                case 'ol': {
+                    let items = Array.from(node.children)
+                        .filter(child => child.tagName === 'LI')
+                        .map((li, index) => {
+                            let marker = tag === 'ol' ? `${index + 1}.` : '-';
+                            let text = nodeToMarkdown(li).trim();
+                            return `${marker} ${text}`;
+                        });
+                    return items.join('\n') + '\n\n';
+                }
+                case 'h1':
+                case 'h2':
+                case 'h3':
+                case 'h4':
+                case 'h5':
+                case 'h6': {
+                    let level = Number(tag[1]);
+                    return `${'#'.repeat(level)} ${children().trim()}\n\n`;
+                }
+                default:
+                    return children();
+            }
+        }
+
+        let markdown = nodeToMarkdown(container).replace(/\n{3,}/g, '\n\n').trim();
+
+        if (!markdown) {
+            alert('Please select some content first.');
+            return;
+        }
+
+        let domain = location.hostname;
+        let pageUrl = location.href;
+        let originalUrl = '';
+
+        if (domain.includes('archive.is') || domain.includes('archive.today')) {
+            let input = document.querySelector('input[name="q"]');
+            if (input) {
+                originalUrl = input.value;
+            }
+        }
+
+        let frontMatter = `---\nlayout: post\ntitle: "${title.replace(/"/g, '\\"')}"\ndate: ${today}\n---\n\n`;
+
+        let quoted = markdown.split('\n').map(line => `> ${line}`).join('\n');
+        let citation = `${quoted}\n\n— [${title}](${pageUrl}), ${domain}\n`;
+        if (originalUrl) {
+            citation += `\nOriginal source: [${originalUrl}](${originalUrl})\n`;
+        }
+
+        let content = `${frontMatter}${citation}`;
+        let url = `https://github.com/mknudsen/linkhal.de/new/master/_posts?filename=${encodeURIComponent(filename)}&value=${encodeURIComponent(content)}`;
+
+        window.open(url, '_blank');
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        let minified = Terser.minify_sync("(" + bookmarkletSource.toString() + ")();").code;
+        document.getElementById("bookmarklet").href = "javascript:" + encodeURIComponent(minified);
+    });
+</script>
